@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Run unit & integration tests
+        run: npm test
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        run: npm run test:e2e
+
+      - name: Docker build & healthcheck smoke test
+        run: |
+          docker build -t store-ops-console:ci .
+          docker run -d --name ops-smoke -p 3001:3001 \
+            -e NODE_ENV=production \
+            -e SESSION_SECRET=ci-smoke-test-strong-secret-at-least-32-chars \
+            -e ALLOW_DEMO_USERS=true \
+            -e COOKIE_SECURE=false \
+            store-ops-console:ci
+          for i in $(seq 1 15); do
+            if curl -fsS http://localhost:3001/api/health; then
+              docker rm -f ops-smoke
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs ops-smoke
+          docker rm -f ops-smoke
+          exit 1

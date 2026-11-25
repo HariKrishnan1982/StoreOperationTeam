@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    container_name: store_ops_console
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      DATABASE_PATH: "/app/data/store_ops.db"
+      SESSION_SECRET: "${SESSION_SECRET:-change-me-in-production-min-16-chars}"
+      CORS_ORIGINS: "http://localhost:3001"
+      LOG_LEVEL: "info"
+    volumes:
+      - ./data:/app/data
+      - ./backups:/app/backups
+    restart: unless-stopped
